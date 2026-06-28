@@ -128,6 +128,10 @@ npm create vite@latest frontend -- --template react-ts
 # Instalar as dependências do frontend
 cd frontend
 npm install
+
+# Instalar MUI v6 e biblioteca de drag & drop
+npm install @mui/material @emotion/react @emotion/styled @mui/icons-material @hello-pangea/dnd
+
 cd ..
 ```
 
@@ -145,14 +149,17 @@ mkdir backend
 cd backend
 npm init -y
 
-# Instalar as dependências do servidor Express e variáveis de ambiente
-npm install express cors dotenv
+# Instalar as dependências do Express, Prisma Client e driver do SQLite
+npm install express cors dotenv @prisma/client @prisma/adapter-better-sqlite3 better-sqlite3
 
-# Instalar TypeScript e as tipagens de desenvolvimento
-npm install --save-dev typescript @types/node @types/express @types/cors ts-node
+# Instalar dependências de desenvolvimento (Compilador TS, CLI do Prisma, executores e tipagens)
+npm install --save-dev typescript @types/node @types/express @types/cors ts-node tsx prisma @types/better-sqlite3
 
 # Inicializar o arquivo de configuração do TypeScript (tsconfig.json)
 npx tsc --init
+
+# Inicializar o Prisma para SQLite
+npx prisma init --datasource-provider sqlite
 ```
 
 No `package.json` do backend, configuramos como **ES Module** e adicionamos os scripts:
@@ -170,6 +177,23 @@ No `package.json` do backend, configuramos como **ES Module** e adicionamos os s
 > **Importante:** O `"type": "module"` é necessário porque o `tsconfig.json` do backend utiliza `"module": "nodenext"` com `"verbatimModuleSyntax": true`. Essa combinação exige que o pacote seja tratado como ESM.
 
 Criamos o arquivo de entrada `backend/src/index.ts` com o servidor Express básico.
+
+Adicionalmente, para a **Fase 0 (SQLite e Prisma)**:
+
+1. Configuramos o arquivo `backend/.env` para salvar o banco em `file:./prisma/dev.db`.
+2. Registramos o script de seed no arquivo `backend/prisma.config.ts`:
+   ```typescript
+   migrations: {
+     path: "prisma/migrations",
+     seed: "npx tsx prisma/seed.ts",
+   }
+   ```
+3. Executamos o push inicial, geramos o cliente do Prisma e rodamos o seed:
+   ```bash
+   npx prisma db push
+   npx prisma generate
+   npx prisma db seed
+   ```
 
 ---
 
@@ -238,7 +262,14 @@ cd task-management-ai
 # 2. Instalar todas as dependências (raiz + subprojetos)
 npm install
 
-# 3. Rodar o projeto em modo de desenvolvimento
+# 3. Gerar tabelas e semear dados iniciais de 2026 no SQLite
+cd backend
+npx prisma db push
+npx prisma generate
+npx prisma db seed
+cd ..
+
+# 4. Rodar o projeto em modo de desenvolvimento
 npm run dev
 ```
 
