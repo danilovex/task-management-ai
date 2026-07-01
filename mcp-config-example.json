@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "task-management-kanban": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp-server.ts"],
+      "cwd": "/CAMINHO/ABSOLUTO/PARA/task-management-ai/backend",
+      "env": {
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    }
+  }
+}

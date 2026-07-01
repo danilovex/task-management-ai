@@ -39,6 +39,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CalendarTodayIcon from '@mui/icons-material/CalendarToday';
 import FilterAltIcon from '@mui/icons-material/FilterAlt';
 import SearchIcon from '@mui/icons-material/Search';
+import { AIChatDrawer } from './components/AIChatDrawer';
+import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 const API_BASE = 'http://localhost:3001/api';
 
@@ -111,6 +113,7 @@ function App() {
   // Modais
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   // Campos do formulário
   const [formNome, setFormNome] = useState('');
@@ -649,6 +652,16 @@ function App() {
         </DragDropContext>
       </Box>
 
+      {/* Botão do Chat do Agente de IA */}
+      <Fab
+        color="secondary"
+        aria-label="chat"
+        onClick={() => setChatOpen(true)}
+        sx={{ position: 'fixed', bottom: 96, right: 24 }}
+      >
+        <SmartToyIcon />
+      </Fab>
+
       {/* Botão de Nova Tarefa */}
       <Fab
         color="primary"
@@ -658,6 +671,13 @@ function App() {
       >
         <AddIcon />
       </Fab>
+
+      {/* Gaveta do Chat do Agente de IA */}
+      <AIChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onTaskMutated={fetchData}
+      />
 
       {/* Modal Criar / Editar */}
       <Dialog

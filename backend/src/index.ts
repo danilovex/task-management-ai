@@ -2,6 +2,7 @@ import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { prisma } from './db.js';
+import { processChat } from './services/ai.js';
 
 // Carrega as variáveis de ambiente
 dotenv.config();
@@ -192,6 +193,24 @@ app.get('/api/tags', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Erro ao buscar tags:', error);
     res.status(500).json({ error: 'Erro interno ao buscar tags' });
+  }
+});
+
+// 7. Endpoint do Chat do Agente de IA
+app.post('/api/chat', async (req: Request, res: Response) => {
+  try {
+    const { messages } = req.body;
+    if (!Array.isArray(messages)) {
+      res
+        .status(400)
+        .json({ error: 'Histórico de mensagens inválido ou ausente' });
+      return;
+    }
+    const reply = await processChat(messages);
+    res.json({ reply });
+  } catch (error: any) {
+    console.error('Erro no processamento do chat do agente:', error);
+    res.status(500).json({ error: 'Erro ao processar mensagem do chat' });
   }
 });
 

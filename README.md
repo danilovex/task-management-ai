@@ -291,11 +291,122 @@ npm run dev
 
 ---
 
+## 🤖 Fase 1 — Integração do Agente de IA (LangChain + OpenAI)
+
+Implementamos um agente de inteligência artificial interativo para responder e operar o quadro Kanban via chat na interface.
+
+### 1. Pacotes Instalados no Backend
+
+Instalamos o suporte básico de IA do ecossistema LangChain na pasta `backend/`:
+
+```bash
+cd backend
+npm install @langchain/openai @langchain/core zod
+```
+
+### 2. Racional e Arquitetura do Agente (`backend/src/services/ai.ts`)
+
+- **Execução Customizada:** Em vez de utilizar o executor legado (`AgentExecutor` de `langchain/agents` que possui problemas de importação sob as regras estritas de ESM/`nodenext`), desenvolvemos um loop de controle moderno de **Tool Calling** utilizando diretamente as mensagens estruturadas do `@langchain/core` e binding do `@langchain/openai`.
+- **Ferramentas Registradas (Tools):**
+  - `get_tasks_summary`: Consulta as tarefas por mês/responsável e devolve estatísticas detalhadas.
+  - `get_tasks_by_responsible`: Busca tarefas vinculadas a pessoas por trecho de nome.
+  - `get_tasks_by_tag`: Busca tarefas associadas a tags específicas.
+  - `get_overdue_tasks`: Filtra tarefas com prazo ultrapassado que não foram finalizadas.
+  - `create_task`: Cria tarefas vinculando responsável e períodos em formato ISO.
+  - `update_task_status`: Move tarefas entre colunas (ex: backlog para doing).
+- **Contexto Temporal Dinâmico:** Injetamos a data atual da máquina no Prompt do Sistema para que o modelo entenda semanticamente referências relativas como _"hoje"_, _"este mês"_ ou _"este ano"_ e monte filtros corretos no banco.
+- **Restrição de Escopo:** O agente está programado para responder apenas sobre o escopo de tarefas e Kanban. Perguntas aleatórias (receitas, piadas, programação) são polidamente recusadas.
+
+### 3. Interface Visual do Chat (`frontend/`)
+
+- **Botão Flutuante (FAB):** Um botão redondo flutuante com ícone de robô (`SmartToyIcon`) posicionado no canto inferior direito.
+- **Gaveta Lateral (`AIChatDrawer`):** Um componente sliding drawer que abriga o histórico da conversa, balões estilizados separados por cores para usuário/assistente e animação de carregamento ("Pensando...").
+- **Sincronização em Tempo Real:** O chat implementa um callback (`onTaskMutated`) que recarrega o quadro Kanban imediatamente após o agente confirmar a criação ou a movimentação de uma tarefa pelo chat.
+
+---
+
+## 🔌 Fase 2 — MCP Server (Model Context Protocol)
+
+Expomos as ferramentas de gerenciamento de tarefas como um **MCP Server** standalone, permitindo que qualquer cliente compatível (Claude Desktop, Cursor, IDEs) consuma as operações do Kanban de forma padronizada.
+
+### 1. Pacotes Instalados no Backend
+
+```bash
+cd backend
+npm install @modelcontextprotocol/sdk
+```
+
+### 2. Refatoração — Camada Compartilhada de Handlers
+
+Para evitar duplicação de código entre o agente LangChain e o MCP Server, extraímos toda a lógica de acesso a dados (queries Prisma) para funções TypeScript puras reutilizáveis:
+
+```
+backend/src/
+├── tools/
+│   ├── handlers.ts   # Lógica de negócio pura (Prisma queries)
+│   └── index.ts      # Barrel file de re-exportação
+├── services/
+│   └── ai.ts         # Agente LangChain (agora usa handlers)
+└── mcp-server.ts     # MCP Server standalone (também usa handlers)
+```
+
+- **`handlers.ts`**: 6 funções assíncronas puras (`getTasksSummary`, `getTasksByResponsible`, `getTasksByTag`, `getOverdueTasks`, `createTask`, `updateTaskStatus`) que recebem parâmetros tipados e retornam strings.
+- **`ai.ts`**: Refatorado para ser uma casca fina — cada `tool()` do LangChain agora apenas delega para o handler correspondente.
+- **`mcp-server.ts`**: Registra as mesmas 6 tools via `server.tool()` do SDK do MCP, reutilizando os mesmos handlers.
+
+### 3. Arquitetura do MCP Server
+
+- **Transporte:** Stdio (padrão para ferramentas locais). O servidor é spawnado pelo cliente MCP como um subprocesso.
+- **Porta:** Nenhuma porta HTTP adicional é necessária — o servidor Express existente (porta 3001) **não foi alterado**.
+- **Classe:** `McpServer` de `@modelcontextprotocol/sdk/server/mcp.js` (API de alto nível recomendada).
+
+### 4. Tools Expostas via MCP
+
+| Tool                       | Tipo    | Descrição                         |
+| -------------------------- | ------- | --------------------------------- |
+| `get_tasks_summary`        | Leitura | Resumo quantitativo por status    |
+| `get_tasks_by_responsible` | Leitura | Tarefas filtradas por responsável |
+| `get_tasks_by_tag`         | Leitura | Tarefas filtradas por tag         |
+| `get_overdue_tasks`        | Leitura | Tarefas com prazo ultrapassado    |
+| `create_task`              | Escrita | Criar nova tarefa no quadro       |
+| `update_task_status`       | Escrita | Mover tarefa entre colunas        |
+
+### 5. Como Executar o MCP Server
+
+```bash
+# Iniciar o servidor MCP (modo standalone via stdio)
+cd backend
+npm run mcp
+```
+
+### 6. Como Configurar em Clientes MCP (Claude Desktop / Cursor)
+
+Adicione ao arquivo de configuração do seu cliente MCP (ex: `claude_desktop_config.json`):
+
+```json
+{
+  "mcpServers": {
+    "task-management-kanban": {
+      "command": "npx",
+      "args": ["tsx", "src/mcp-server.ts"],
+      "cwd": "/CAMINHO/ABSOLUTO/PARA/task-management-ai/backend",
+      "env": {
+        "DATABASE_URL": "file:./prisma/dev.db"
+      }
+    }
+  }
+}
+```
+
+> Um exemplo pronto está disponível em `mcp-config-example.json` na raiz do repositório.
+
+---
+
 ## 📚 Roadmap do Projeto
 
-- [ ] **Fase 0** — Implementar o Kanban funcional (CRUD de tarefas + drag & drop)
-- [ ] **Fase 1** — Integrar Agentes de IA para interação inteligente com as tarefas
-- [ ] **Fase 2** — Expor dados via MCP (Model Context Protocol) para consumo por modelos de IA
+- [x] **Fase 0** — Implementar o Kanban funcional (CRUD de tarefas + drag & drop)
+- [x] **Fase 1** — Integrar Agentes de IA para interação inteligente com as tarefas
+- [x] **Fase 2** — Expor dados via MCP (Model Context Protocol) para consumo por modelos de IA
 - [ ] **Fase 3** — Criar fluxos de automação com n8n
 
 ---
